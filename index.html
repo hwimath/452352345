@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>삼각함수 사이의 관계</title>
+  <!-- MathJax 로드 (LaTeX 수식용) -->
+  <script
+    src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+    defer
+  ></script>
+
+  <style>
+    /* 흑백 색 배합 */
+    body {
+      background-color: #ffffff;
+      color: #000000;
+      font-family: sans-serif;
+      margin: 20px;
+    }
+    #startScreen, #quizScreen, #endScreen {
+      display: none;
+    }
+    .energy-bar {
+      width: 300px;
+      height: 20px;
+      background-color: #ccc;
+      margin: 10px 0;
+      position: relative;
+    }
+    .energy-fill {
+      width: 100%;
+      height: 100%;
+      background-color: #000; /* 검정색으로 채워지는 부분 */
+      transition: width 0.2s;
+    }
+    button {
+      margin: 6px 0;
+      background-color: #000;
+      color: #fff;
+      border: 1px solid #000;
+      padding: 8px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #555;
+    }
+    .question-box {
+      border: 1px solid #000;
+      padding: 10px;
+      margin: 10px 0;
+    }
+  </style>
+</head>
+
+<body>
+<h1>삼각함수 사이의 관계</h1>
+
+<!-- 시작 화면 -->
+<div id="startScreen" style="display:block;">
+  <p>이름을 입력하고 난이도를 선택해 주세요.</p>
+  <label for="playerName">이름: </label>
+  <input type="text" id="playerName" />
+  <div style="margin-top:10px;">
+    <h3>난이도 선택</h3>
+    <button onclick="selectDifficulty('하')">하 (시간제한 없음)</button>
+    <button onclick="selectDifficulty('중')">중 (40초, 문제당 13점)</button>
+    <button onclick="selectDifficulty('상')">상 (30초, 문제당 15점)</button>
+    <button onclick="selectDifficulty('최상')">최상 (20초, 문제당 20점)</button>
+  </div>
+</div>
+
+<!-- 퀴즈 화면 -->
+<div id="quizScreen">
+  <div>
+    총 플레이 시간: <span id="totalTime">0</span>초 |
+    남은 기회: <span id="lives">3</span> |
+    점수: <span id="score">0</span>
+  </div>
+  <div class="energy-bar" id="energyBar">
+    <div class="energy-fill" id="energyFill"></div>
+  </div>
+  <div class="question-box" id="questionContainer">
+    <!-- 문제 텍스트/조건/보기 등 동적 삽입 -->
+  </div>
+  <button id="nextBtn" onclick="goNext()" style="display:none;">다음 문제</button>
+</div>
+
+<!-- 종료 화면 -->
+<div id="endScreen">
+  <h2>게임이 종료되었습니다!</h2>
+  <p>최종 점수: <span id="finalScore"></span></p>
+  <button onclick="sendScore()">점수전송</button>
+  <pre id="response"></pre>
+</div>
+
+<script>
+// ------------------------------------------
+// 서버에 점수 전송
+// ------------------------------------------
+function saveData(game, name, score, elapsedTime) {
+    const FUNCTION_URL = "https://us-central1-record-f420d.cloudfunctions.net/report";
+
+    const requestData = {
+        game,
+        name,
+        score: parseInt(score, 10),
+        elapsedTime: parseInt(elapsedTime, 10)
+    };
+
+    fetch(FUNCTION_URL, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestData)
+    })
+    .then(response => {
+      return response.json()
+          .then(responseData => ({
+              ok: response.ok,
+              data: responseData
+          }));
+    })
+    .then(({ok, data}) => {
+      if (ok) {
+        document.getElementById('response').innerText =
+          `성공: ${JSON.stringify(data, null, 2)}`;
+      } else {
+        document.getElementById('response').innerText =
+          `오류: ${JSON.stringify(data, null, 2)}`;
+      }
+    })
+    .catch(error => {
+      console.error('요청 실패:', error);
+      document.getElementById('response').innerText =
+        `네트워크 오류: ${error.message}`;
+    });
+}
+
+// ------------------------------------------
+// 보기 순서를 섞기
+// ------------------------------------------
+function shuffleArray(array) {
+  for(let i = array.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i+1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+}
+
+// --------------------------------------------------------------------------------------
+// 모든 문제 (문제 8~63, 단 35번만 제외). LaTeX 수식은 \\(...\\) 형태, 불필요문자 W 없음
+// --------------------------------------------------------------------------------------
+const allQuestions = [
+  {
+    // #8
+    condition: "\\(AB=3\\sqrt{5},\\; BC=6,\\; \\angle C=\\dfrac{\\pi}{3}\\)인 삼각형 \\(ABC\\)에서",
+    question: "\\(\\sin A\\)의 값을 구하시오.",
+    choices: [
+      { text: "\\(\\dfrac{\\sqrt{3}}{6}\\)", correct: false },
+      { text: "\\(\\dfrac{\\sqrt{5}}{5}\\)", correct: false },
+      { text: "\\(\\dfrac{\\sqrt{15}}{5}\\)", correct: true },
+      { text: "\\(\\dfrac12\\)", correct: false },
+    ]
+  },
+  {
+    // #9
+    condition: "\\(AC=4\\sqrt{3},\\; BC=4,\\; \\angle B=\\dfrac{\\pi}{4}\\)인 삼각형 \\(ABC\\)에서",
+    question: "\\(\\sin A\\)의 값을 구하시오.",
+    choices: [
+      { text: "\\(\\dfrac12\\)", correct: false },
+      { text: "\\(\\dfrac{\\sqrt{6}}{6}\\)", correct: true },
+      { text: "\\(\\dfrac{\\sqrt{5}}{5}\\)", correct: false },
+      { text: "\\(\\dfrac{\\sqrt{3}}{3}\\)", correct: false },
+    ]
+  },
+  {
+    // #10
+    condition: "삼각형 \\(ABC\\)에서 \\(\\angle A : \\angle B : \\angle C = 3 : 4 : 5\\)",
+    question: "\\(\\cos A : \\sin B\\)의 비를 구하시오.",
+    choices: [
+      { text: "\\(1 : \\sqrt{3}\\)", correct: false },
+      { text: "\\(\\sqrt{2} : 1\\)", correct: false },
+      { text: "\\(\\sqrt{2} : \\sqrt{3}\\)", correct: true },
+      { text: "\\(\\sqrt{3} : \\sqrt{2}\\)", correct: false },
+    ]
+  },
+  {
+    // #11
+    condition: "삼각형 \\(ABC\\)의 세 내각 크기 비가 \\(1 : 2 : 3\\)일 때",
+    question: "\\(\\sin A : \\sin B : \\sin C\\)의 비를 구하시오.",
+    choices: [
+      { text: "1 : \\(\\sqrt{3}\\) : 2", correct: true },
+      { text: "1 : 2 : \\(\\sqrt{3}\\)", correct: false },
+      { text: "\\(\\dfrac12 : \\dfrac{\\sqrt{3}}2 : 1\\)", correct: false },
+      { text: "2 : \\(\\sqrt{3}\\) : 1", correct: false },
+    ]
+  },
+  {
+    // #12
+    condition: "원점 \\(O\\)와 점 \\((12,-5)\\)를 지나는 동경",
+    question: "\\(\\sin\\theta\\)의 값을 구하시오.",
+    choices: [
+      { text: "\\(\\dfrac{5}{13}\\)", correct: false },
+      { text: "\\(-\\dfrac{12}{13}\\)", correct: false },
+      { text: "\\(-\\dfrac{5}{13}\\)", correct: true },
+      { text: "\\(\\dfrac{12}{13}\\)", correct: false },
+    ]
+  },
+  {
+    // #13
+    condition: "원점 \\(O\\)와 점 \\((12,-5)\\)를 지나는 동경",
+    question: "\\(\\cos\\theta\\)의 값을 구하시오.",
+    choices: [
+      { text: "\\(\\dfrac{12}{13}\\)", correct: true },
+      { text: "\\(\\dfrac{5}{13}\\)", correct: false },
+      { text: "\\(-\\dfrac{12}{13}\\)", correct: false },
+      { text: "\\(-\\dfrac{5}{13}\\)", correct: false },
+    ]
+  },
+  {
+    // #14
+    condition: "원점 \\(O\\)와 점 \\((12,-5)\\)를 지나는 동경",
+    question: "\\(\\tan\\theta\\)의 값을 구하시오.",
+    choices: [
+      { text: "\\(\\dfrac{5}{12}\\)", correct: false },
+      { text: "\\(-\\dfrac{5}{12}\\)", correct: true },
+      { text: "\\(-\\dfrac{12}{5}\\)", correct: false },
+      { text: "\\(\\dfrac{12}{5}\\)", correct: false },
+    ]
+  },
+  {
+    // #15
+    condition: "원점 \\(O\\)와 점 \\((3,-1)\\)를 지나는 동경",
+    question: "\\(\\sin\\theta\\)의 값을 구하시오.",
+    choices: [
+      { text: "\\(\\dfrac{1}{\\sqrt{10}}\\)", correct: false },
+      { text: "\\(-\\dfrac{1}{\\sqrt{10}}\\)", correct: true },
+      { text: "\\(\\dfrac{3}{\\sqrt{10}}\\)", correct: false },
+      { text: "\\(-\\dfrac{3}{\\sqrt{10}}\\)", correct: false },
+    ]
+  },
+  {
+    // #16
+    condition: "원점 \\(O\\)와 점 \\((3,-1)\\)를 지나는 동경",
+    question: "\\(\\cos\\theta\\)의 값을 구하시오.",
+    choices: [
+      { text: "\\(\\dfrac{3}{\\sqrt{10}}\\)", correct: true },
+      { text: "\\(-\\dfrac{3}{\\sqrt{10}}\\)", correct: false },
+      { text: "\\(\\dfrac{1}{\\sqrt{10}}\\)", correct: false },
+      { text: "\\(-\\dfrac{1}{\\sqrt{10}}\\)", correct: false },
+    ]
+  },
+  {
+    // #17
+    condition: "원점 \\(O\\)와 점 \\((3,-1)\\)를 지나는 동경",
+    question: "\\(\\tan\\theta\\)의 값을 구하시오.",
+    choices: [
+      { text: "\\(-\\dfrac{1}{3}\\)", correct: true },
+      { text: "\\(\\dfrac{1}{3}\\)", correct: false },
+      { text: "\\(-3\\)", correct: false },
+      { text: "\\(3\\)", correct: false },
+    ]
+  },
+  {
+    // #18
+    condition: "원점 \\(O\\)와 점 \\((5,-12)\\)를 지나는 동경",
+    question: "\\(\\sin\\theta\\)의 값을 구하시오.",
+    choices: [
+      { text: "\\(-\\dfrac{5}{13}\\)", correct: false },
+      { text: "\\(-\\dfrac{12}{13}\\)", correct: true },
+      { text: "\\(\\dfrac{5}{13}\\)", correct: false },
+      { text: "\\(\\dfrac{12}{13}\\)", correct: false },
+    ]
+  },
+  {
+    // #19
+    condition: "원점 \\(O\\)와 점 \\((5,-12)\\)를 지나는 동경",
+    question: "\\(\\cos\\theta\\)의 값을 구하시오.",
+    choices: [
+      { text: "\\(-\\dfrac{5}{13}\\)", correct: false },
+      { text: "\\(\\dfrac{5}{13}\\)", correct: true },
+      { text: "\\(-\\dfrac{12}{13}\\)", correct: false },
+      { text: "\\(\\dfrac{12}{13}\\)", correct: false },
+    ]
+  },
+  {
+    // #20
+    condition: "원점 \\(O\\)와 점 \\((5,-12)\\)를 지나는 동경",
+    question: "\\(\\tan\\theta\\)의 값을 구하시오.",
+    choices: [
+      { text: "\\(\\dfrac{12}{5}\\)", correct: false },
+      { text: "\\(-\\dfrac{12}{5}\\)", correct: true },
+      { text: "\\(\\dfrac{5}{12}\\)", correct: false },
+      { text: "\\(-\\dfrac{5}{12}\\)", correct: false },
+    ]
+  },
+  {
+    // #21
+    condition: "원점 \\(O\\)와 점 \\((-3,4)\\)를 지나는 동경",
+    question: "\\(\\sin\\theta\\)의 값을 구하시오.",
+    choices: [
+      { text: "\\(\\dfrac{4}{5}\\)", correct: true },
+      { text: "\\(-\\dfrac{4}{5}\\)", correct: false },
+      { text: "\\(\\dfrac{3}{5}\\)", correct: false },
+      { text: "\\(-\\dfrac{3}{5}\\)", correct: false },
+    ]
+  },
+  {
+    // #22
+    condition: "원점 \\(O\\)와 점 \\((-3,4)\\)를 지나는 동경",
+    question: "\\(\\cos\\theta\\)의 값을 구하시오.",
+    choices: [
+      { text: "\\(\\dfrac{3}{5}\\)", correct: false },
+      { text: "\\(\\dfrac{4}{5}\\)", correct: false },
+      { text: "\\(-\\dfrac{3}{5}\\)", correct: true },
+      { text: "\\(-\\dfrac{4}{5}\\)", correct: false },
+    ]
+  },
+  {
+    // #23
+    condition: "원점 \\(O\\)와 점 \\((-3,4)\\)를 지나는 동경",
+    question: "\\(\\tan\\theta\\)의 값을 구하시오.",
+    choices: [
+      { text: "\\(\\dfrac{4}{-3}\\)", correct: false },
+      { text: "\\(-\\dfrac{4}{3}\\)", correct: true },
+      { text: "\\(\\dfrac{3}{4}\\)", correct: false },
+      { text: "\\(-\\dfrac{3}{4}\\)", correct: false },
+    ]
+  },
+  {
+    // #24
+    condition: "원점 \\(O\\)와 점 \\((3,-4)\\)를 지나는 동경",
+    question: "\\(\\sin\\theta\\)의 값을 구하시오.",
+    choices: [
+      { text: "\\(\\dfrac{4}{5}\\)", correct: false },
+      { text: "\\(-\\dfrac{4}{5}\\)", correct: true },
+      { text: "\\(\\dfrac{3}{5}\\)", correct: false },
+      { text: "\\(-\\dfrac{3}{5}\\)", correct: false },
+    ]
+  },
+  {
+    // #25
+    condition: "원점 \\(O\\)와 점 \\((3,-4)\\)를 지나는 동경",
+    question: "\\(\\cos\\theta\\)의 값을 구하시오.",
+    choices: [
+      { text: "\\(\\dfrac{3}{5}\\)", correct: true },
+      { text: "\\(\\dfrac{4}{5}\\)", correct: false },
+      { text: "\\(-\\dfrac{3}{5}\\)", correct: false },
+      { text: "\\(-\\dfrac{4}{5}\\)", correct: false },
+    ]
+  },
+  {
+    // #26
+    condition: "원점 \\(O\\)와 점 \\((3,-4)\\)를 지나는 동경",
+    question: "\\(\\tan\\theta\\)의 값을 구하시오.",
+    choices: [
+      { text: "\\(-\\dfrac{4}{3}\\)", correct: true },
+      { text: "\\(\\dfrac{4}{3}\\)", correct: false },
+      { text: "\\(\\dfrac{3}{4}\\)", correct: false },
+      { text: "\\(-\\dfrac{3}{4}\\)", correct: false },
+    ]
+  },
+  {
+    // #30
+    condition: "원점 \\(O\\)와 점 \\((-3,4)\\)를 지나는 동경",
+    question: "\\(\\sin\\theta + \\cos\\theta\\)의 값을 구하시오.",
+    choices: [
+      { text: "\\(\\dfrac{1}{5}\\)", correct: true },
+      { text: "\\(\\dfrac{7}{5}\\)", correct: false },
+      { text: "\\(-\\dfrac{1}{5}\\)", correct: false },
+      { text: "\\(-\\dfrac{7}{5}\\)", correct: false },
+    ]
+  },
+  {
+    // #31
+    condition: "원점 \\(O\\)와 점 \\((-4,-3)\\)를 지나는 동경",
+    question: "\\(\\dfrac{\\sin\\theta}{\\tan\\theta}\\)의 값을 구하시오.",
+    choices: [
+      { text: "\\(\\dfrac{3}{5}\\)", correct: false },
+      { text: "\\(-\\dfrac{3}{5}\\)", correct: false },
+      { text: "\\(\\dfrac{4}{5}\\)", correct: false },
+      { text: "\\(-\\dfrac{4}{5}\\)", correct: true },
+    ]
+  },
+  {
+    // #33
+    condition: "원점 \\(O\\)와 점 \\((1,-\\sqrt{3})\\)를 지나는 동경",
+    question: "\\(\\dfrac{1}{\\sin^2\\theta} + \\tan^2\\theta\\)의 값을 구하시오.",
+    choices: [
+      { text: "\\(\\dfrac{7}{4}\\)", correct: false },
+      { text: "\\(\\dfrac{4}{3}\\)", correct: false },
+      { text: "\\(\\dfrac{15}{4}\\)", correct: true },
+      { text: "\\(\\dfrac{4}{15}\\)", correct: false },
+    ]
+  },
+  {
+    // #34
+    condition: "원점 \\(O\\)와 점 \\((4,-3)\\)를 지나는 동경",
+    question: "\\(\\sin\\theta + \\tan\\theta\\)의 값을 구하시오.",
+    choices: [
+      { text: "\\(-\\dfrac{3}{5} - \\dfrac{3}{4}\\)", correct: false },
+      { text: "\\(-\\dfrac{7}{4}\\)", correct: false },
+      { text: "\\(-\\dfrac{27}{20}\\)", correct: true },
+      { text: "\\(-\\dfrac{3}{5} + \\dfrac{3}{4}\\)", correct: false },
+    ]
+  },
+  {
+    // #43
+    condition: "\\(\\sin\\theta > 0,\\; \\tan\\theta > 0\\)",
+    question: "\\(\\theta\\)는 몇 사분면에 위치하는가?",
+    choices: [
+      { text: "제1사분면", correct: true },
+      { text: "제2사분면", correct: false },
+      { text: "제3사분면", correct: false },
+      { text: "제4사분면", correct: false },
+    ]
+  },
+  {
+    // #44
+    condition: "\\(\\sin\\theta > 0,\\; \\cos\\theta < 0\\)",
+    question: "\\(\\theta\\)는 몇 사분면에 위치하는가?",
+    choices: [
+      { text: "제1사분면", correct: false },
+      { text: "제2사분면", correct: true },
+      { text: "제3사분면", correct: false },
+      { text: "제4사분면", correct: false },
+    ]
+  },
+  {
+    // #45
+    condition: "\\(\\cos\\theta < 0,\\; \\sin\\theta > 0\\)",
+    question: "\\(\\theta\\)는 몇 사분면에 위치하는가?",
+    choices: [
+      { text: "제1사분면", correct: false },
+      { text: "제2사분면", correct: true },
+      { text: "제3사분면", correct: false },
+      { text: "제4사분면", correct: false },
+    ]
+  },
+  {
+    // #46
+    condition: "\\(\\tan\\theta < 0,\\; \\cos\\theta > 0\\)",
+    question: "\\(\\theta\\)는 몇 사분면에 위치하는가?",
+    choices: [
+      { text: "제1사분면", correct: false },
+      { text: "제2사분면", correct: false },
+      { text: "제3사분면", correct: false },
+      { text: "제4사분면", correct: true },
+    ]
+  },
+  {
+    // #47
+    condition: "\\(\\cos\\theta < 0,\\; \\tan\\theta < 0\\)",
+    question: "\\(\\theta\\)는 몇 사분면에 위치하는가?",
+    choices: [
+      { text: "제1사분면", correct: false },
+      { text: "제2사분면", correct: true },
+      { text: "제3사분면", correct: false },
+      { text: "제4사분면", correct: false },
+    ]
+  },
+  {
+    // #53
+    condition: "제1사분면, \\(\\sin\\theta = \\dfrac{1}{5}\\)",
+    question: "\\(\\tan\\theta\\)의 값을 구하시오.",
+    choices: [
+      { text: "\\(\\dfrac12\\)", correct: false },
+      { text: "\\(\\dfrac{\\sqrt{6}}{12}\\)", correct: true },
+      { text: "\\(\\dfrac{\\sqrt{6}}{6}\\)", correct: false },
+      { text: "\\(\\dfrac{1}{\\sqrt{6}}\\)", correct: false },
+    ]
+  },
+  {
+    // #54
+    condition: "제1사분면, \\(\\sin\\theta = \\dfrac{12}{13}\\)",
+    question: "\\(\\cos\\theta\\)의 값을 구하시오.",
+    choices: [
+      { text: "\\(\\dfrac{5}{13}\\)", correct: true },
+      { text: "\\(-\\dfrac{5}{13}\\)", correct: false },
+      { text: "\\(\\dfrac{13}{5}\\)", correct: false },
+      { text: "\\(-\\dfrac{13}{5}\\)", correct: false },
+    ]
+  },
+  {
+    // #55
+    condition: "제4사분면, \\(\\cos\\theta = \\dfrac{\\sqrt{2}}{3}\\)",
+    question: "\\(\\sin\\theta\\)의 값을 구하시오.",
+    choices: [
+      { text: "\\(\\dfrac{\\sqrt{7}}{3}\\)", correct: false },
+      { text: "\\(-\\dfrac{\\sqrt{7}}{3}\\)", correct: true },
+      { text: "\\(\\dfrac{1}{3}\\)", correct: false },
+      { text: "\\(-\\dfrac{1}{3}\\)", correct: false },
+    ]
+  },
+  {
+    // #56
+    condition: "제2사분면, \\(\\tan\\theta = -\\dfrac{1}{2}\\)",
+    question: "\\(\\sin\\theta\\)의 값을 구하시오.",
+    choices: [
+      { text: "\\(\\dfrac{\\sqrt{5}}{5}\\)", correct: true },
+      { text: "\\(-\\dfrac{\\sqrt{5}}{5}\\)", correct: false },
+      { text: "\\(\\dfrac{1}{5}\\)", correct: false },
+      { text: "\\(-\\dfrac{1}{\\sqrt{5}}\\)", correct: false },
+    ]
+  },
+  {
+    // #60
+    condition: "제2사분면, \\(\\cos\\theta = -\\dfrac12\\)",
+    question: "\\(\\sin\\theta,\\; \\tan\\theta\\)를 순서대로 고르시오.",
+    choices: [
+      { text: "\\(\\sin\\theta = \\dfrac{\\sqrt{3}}{2},\\;\\tan\\theta = -\\sqrt{3}\\)", correct: true },
+      { text: "\\(\\sin\\theta = \\dfrac{\\sqrt{3}}{2},\\;\\tan\\theta = \\sqrt{3}\\)", correct: false },
+      { text: "\\(\\sin\\theta = -\\dfrac{\\sqrt{3}}{2},\\;\\tan\\theta = -\\sqrt{3}\\)", correct: false },
+      { text: "\\(\\sin\\theta = -\\dfrac{\\sqrt{3}}{2},\\;\\tan\\theta = \\sqrt{3}\\)", correct: false },
+    ]
+  },
+  {
+    // #61
+    condition: "제2사분면, \\(\\sin\\theta = \\dfrac{3}{5}\\)",
+    question: "\\(\\cos\\theta,\\; \\tan\\theta\\)의 값을 구하시오.",
+    choices: [
+      { text: "\\(\\cos\\theta = -\\dfrac{4}{5},\\;\\tan\\theta = -\\dfrac{3}{4}\\)", correct: true },
+      { text: "\\(\\cos\\theta = \\dfrac{4}{5},\\;\\tan\\theta = \\dfrac{3}{4}\\)", correct: false },
+      { text: "\\(\\cos\\theta = -\\dfrac{4}{5},\\;\\tan\\theta = \\dfrac{3}{4}\\)", correct: false },
+      { text: "\\(\\cos\\theta = \\dfrac{4}{5},\\;\\tan\\theta = -\\dfrac{3}{4}\\)", correct: false },
+    ]
+  },
+  {
+    // #62
+    condition: "제2사분면, \\(\\sin\\theta = \\dfrac{3}{5}\\)",
+    question: "\\(\\dfrac{1}{\\,2 + \\tan\\theta}\\)의 값을 구하시오.",
+    choices: [
+      { text: "\\(\\dfrac{4}{5}\\)", correct: true },
+      { text: "\\(-\\dfrac{4}{5}\\)", correct: false },
+      { text: "\\(\\dfrac{5}{4}\\)", correct: false },
+      { text: "\\(-\\dfrac{5}{4}\\)", correct: false },
+    ]
+  },
+  {
+    // #63
+    condition: "제4사분면, \\(\\cos\\theta = \\dfrac{1}{4}\\)",
+    question: "\\(\\tan\\theta\\)의 값을 구하시오.",
+    choices: [
+      { text: "\\(\\dfrac{\\sqrt{15}}{4}\\)", correct: false },
+      { text: "\\(-\\dfrac{\\sqrt{15}}{4}\\)", correct: false },
+      { text: "\\(\\sqrt{15}\\)", correct: false },
+      { text: "\\(-\\sqrt{15}\\)", correct: true },
+    ]
+  }
+];
+
+// ------------------------------------------
+// 전역변수
+// ------------------------------------------
+let questionsOrder = [];
+let currentIndex = 0;
+let isEndless = false;
+let lives = 3;
+let score = 0;
+let startTime = null;
+let totalTimer = null;
+let totalSeconds = 0;
+let questionTimer = null;
+let timeLimit = 0;
+let difficulty = "하";
+let pointsPerQuestion = 10;
+
+// ------------------------------------------
+// 난이도 선택
+// ------------------------------------------
+function selectDifficulty(diff) {
+  const name = document.getElementById('playerName').value.trim();
+  if (!name) {
+    alert("이름을 입력하세요.");
+    return;
+  }
+  difficulty = diff;
+  switch(diff){
+    case "최상":
+      timeLimit = 20;
+      pointsPerQuestion = 20;
+      break;
+    case "상":
+      timeLimit = 30;
+      pointsPerQuestion = 15;
+      break;
+    case "중":
+      timeLimit = 40;
+      pointsPerQuestion = 13;
+      break;
+    case "하":
+      timeLimit = 9999999; // 사실상 무제한
+      pointsPerQuestion = 10;
+      break;
+  }
+  startGame();
+}
+
+// ------------------------------------------
+// 게임 시작
+// ------------------------------------------
+function startGame() {
+  document.getElementById('startScreen').style.display = 'none';
+  document.getElementById('quizScreen').style.display = 'block';
+
+  startTime = Date.now();
+  totalTimer = setInterval(() => {
+    totalSeconds = Math.floor((Date.now() - startTime)/1000);
+    document.getElementById('totalTime').innerText = totalSeconds;
+  }, 1000);
+
+  let indices = Array.from(allQuestions.keys());
+  shuffleArray(indices);
+  questionsOrder = indices; 
+  currentIndex = 0;
+  isEndless = false;
+  lives = 3;
+  score = 0;
+  document.getElementById('lives').innerText = lives;
+  document.getElementById('score').innerText = score;
+
+  renderQuestion();
+}
+
+// ------------------------------------------
+// 문제 렌더링
+// ------------------------------------------
+function renderQuestion() {
+  if (lives <= 0) {
+    endGame();
+    return;
+  }
+
+  if (!isEndless && currentIndex >= allQuestions.length) {
+    // 모든 문제를 1회씩 끝낸 뒤엔 무한반복
+    isEndless = true;
+  }
+
+  let qIndex;
+  if (!isEndless) {
+    qIndex = questionsOrder[currentIndex];
+    currentIndex++;
+  } else {
+    // 무한 반복
+    qIndex = Math.floor(Math.random() * allQuestions.length);
+  }
+
+  const q = allQuestions[qIndex];
+  shuffleArray(q.choices);
+
+  const container = document.getElementById('questionContainer');
+  container.innerHTML = `
+    <div><b>조건:</b> \\(${q.condition}\\)</div>
+    <div><b>문제:</b> ${q.question}</div>
+    <hr />
+    <div id="choicesArea"></div>
+  `;
+
+  const choicesArea = container.querySelector("#choicesArea");
+  q.choices.forEach((choice) => {
+    const btn = document.createElement("button");
+    btn.innerHTML = choice.text;
+    btn.onclick = () => { checkAnswer(q, choice); };
+    choicesArea.appendChild(btn);
+    choicesArea.appendChild(document.createElement("br"));
+  });
+
+  const nb = document.getElementById('nextBtn');
+  nb.style.display = 'none';
+
+  // MathJax 수식 렌더링
+  MathJax.typeset();
+
+  if(difficulty !== "하"){
+    startQuestionTimer();
+  } else {
+    const energyFill = document.getElementById("energyFill");
+    energyFill.style.width = "100%";
+  }
+}
+
+// ------------------------------------------
+// 문제별 타이머(에너지바)
+// ------------------------------------------
+let remainTime = 0;
+function startQuestionTimer() {
+  if(questionTimer) clearInterval(questionTimer);
+  remainTime = timeLimit;
+  updateEnergyBar();
+
+  questionTimer = setInterval(() => {
+    remainTime--;
+    updateEnergyBar();
+    if(remainTime <= 0) {
+      clearInterval(questionTimer);
+      // 시간초과 -> 오답처리
+      lives--;
+      document.getElementById('lives').innerText = lives;
+      if(lives <= 0) {
+        endGame();
+      } else {
+        renderQuestion();
+      }
+    }
+  }, 1000);
+}
+
+// 에너지바 업데이트
+function updateEnergyBar() {
+  const ratio = (remainTime / timeLimit)*100;
+  const energyFill = document.getElementById("energyFill");
+  energyFill.style.width = ratio + "%";
+}
+
+// ------------------------------------------
+// 정답확인
+// ------------------------------------------
+function checkAnswer(questionObj, chosen) {
+  if(questionTimer) clearInterval(questionTimer);
+
+  if(chosen.correct){
+    score += pointsPerQuestion;
+    document.getElementById('score').innerText = score;
+  } else {
+    lives--;
+    document.getElementById('lives').innerText = lives;
+    const correctChoice = questionObj.choices.find(c=>c.correct);
+    alert("오답! 정답은: "+correctChoice.text);
+  }
+
+  document.getElementById('nextBtn').style.display = 'inline-block';
+}
+
+// ------------------------------------------
+// 다음 문제
+// ------------------------------------------
+function goNext() {
+  renderQuestion();
+}
+
+// ------------------------------------------
+// 게임 종료
+// ------------------------------------------
+function endGame() {
+  clearInterval(totalTimer);
+  if(questionTimer) clearInterval(questionTimer);
+
+  document.getElementById('quizScreen').style.display = 'none';
+  document.getElementById('endScreen').style.display = 'block';
+  document.getElementById('finalScore').innerText = score;
+}
+
+// ------------------------------------------
+// 점수 전송
+// ------------------------------------------
+function sendScore() {
+  const name = document.getElementById('playerName').value.trim() || "noname";
+  saveData("삼각함수 사이의 관계", name, score, totalSeconds);
+}
+</script>
+</body>
+</html>
